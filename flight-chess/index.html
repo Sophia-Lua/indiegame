@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>星夜飞行棋 · Aero Ludo</title>
+<style>
+  :root{
+    --bg:#0a0d1e; --surface:rgba(19,23,53,.88); --surface2:#1b2148; --line:#2c3468;
+    --text:#eef1ff; --dim:#8b93c8; --red:#ff4b3e; --yellow:#ffb020; --blue:#3d8bff; --green:#35d46a;
+    --gold:#ffc94d; --magenta:#ff5f9e; --danger:#ff4b3e; --ok:#35d46a;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Microsoft YaHei","PingFang SC",system-ui,sans-serif}
+  #stage{position:fixed;inset:0}
+  canvas{display:block}
+
+  /* ---------- top bar ---------- */
+  #topbar{position:fixed;top:0;left:0;right:0;z-index:20;display:flex;align-items:center;gap:14px;
+    padding:10px 18px;background:linear-gradient(180deg,rgba(10,13,30,.92),rgba(10,13,30,.55) 80%,transparent);
+    backdrop-filter:blur(8px);border-bottom:1px solid rgba(79,123,255,.18)}
+  .logo{display:flex;align-items:baseline;gap:10px;user-select:none}
+  .logo b{font-size:19px;letter-spacing:2px;
+    background:linear-gradient(92deg,var(--gold),var(--magenta) 55%,var(--blue));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .logo span{font-size:10px;letter-spacing:4px;color:var(--dim)}
+  #turnPill{display:flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;
+    background:var(--surface);border:1px solid var(--line);font-size:13px;font-weight:600;
+    transition:border-color .3s, box-shadow .3s;white-space:nowrap}
+  #turnDot{width:10px;height:10px;border-radius:50%;background:var(--red);box-shadow:0 0 10px currentColor}
+  .spacer{flex:1}
+  .ctl{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim)}
+  select{background:var(--surface2);color:var(--text);border:1px solid var(--line);border-radius:8px;
+    padding:6px 8px;font-size:12px;outline:none;cursor:pointer}
+  select:hover{border-color:var(--blue)}
+  .btn{background:var(--surface2);color:var(--text);border:1px solid var(--line);border-radius:8px;
+    padding:7px 13px;font-size:13px;cursor:pointer;transition:.18s;font-family:inherit}
+  .btn:hover{border-color:var(--gold);color:var(--gold);transform:translateY(-1px)}
+  .btn:active{transform:translateY(0)}
+  .btn.icon{padding:7px 10px;font-size:15px;line-height:1}
+
+  /* ---------- players panel ---------- */
+  #players{position:fixed;left:14px;top:64px;z-index:15;display:flex;flex-direction:column;gap:8px;width:196px}
+  .pcard{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--pc);
+    border-radius:10px;padding:9px 11px;transition:.3s;position:relative;overflow:hidden}
+  .pcard.active{border-color:var(--pc);box-shadow:0 0 18px -4px var(--pc), inset 0 0 24px -18px var(--pc)}
+  .pcard.active::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(120deg,transparent 30%,rgba(255,255,255,.06) 50%,transparent 70%);
+    animation:sheen 2.2s linear infinite}
+  @keyframes sheen{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+  .phead{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700}
+  .phead .tag{font-size:10px;font-weight:400;color:var(--dim);margin-left:auto}
+  .pdots{display:flex;gap:6px;margin-top:7px}
+  .pd{width:26px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;
+    font-size:12px;border:1px solid var(--line);background:#101430;color:#3a4278;transition:.3s}
+  .pd.fly{background:var(--pc);color:#0a0d1e;border-color:transparent;box-shadow:0 0 8px -2px var(--pc)}
+  .pd.home{background:var(--pc);color:#fff;border-color:transparent;opacity:.85;animation:pulse 1.2s ease-in-out infinite}
+  .pd.done{background:linear-gradient(135deg,var(--gold),#ff9a3d);color:#3a2400;border-color:transparent;box-shadow:0 0 10px -1px var(--gold)}
+  @keyframes pulse{50%{transform:scale(1.12)}}
+  .pcap{font-size:10px;color:var(--dim);margin-top:6px}
+  .pcap b{color:var(--gold)}
+
+  /* ---------- event log ---------- */
+  #log{position:fixed;left:14px;bottom:14px;z-index:15;width:196px;max-height:172px;overflow-y:auto;
+    background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px;
+    font-size:11px;line-height:1.7;color:var(--dim)}
+  #log::-webkit-scrollbar{width:6px}
+  #log::-webkit-scrollbar-track{background:#101430;border-radius:3px}
+  #log::-webkit-scrollbar-thumb{background:linear-gradient(var(--blue),var(--magenta));border-radius:3px}
+  #log::-webkit-scrollbar-thumb:hover{background:var(--gold)}
+  #log .t{color:#4a5390;margin-right:4px}
+  #log .c0{color:var(--red)} #log .c1{color:var(--yellow)} #log .c2{color:var(--blue)} #log .c3{color:var(--green)}
+  #log .g{color:var(--gold)}
+
+  /* ---------- dice dock ---------- */
+  #dock{position:fixed;right:18px;bottom:18px;z-index:15;display:flex;flex-direction:column;align-items:center;gap:10px}
+  #diceFace{width:64px;height:64px;border-radius:14px;background:linear-gradient(145deg,#fdf9ee,#e8e0cc);
+    color:#141838;display:flex;align-items:center;justify-content:center;font-size:44px;line-height:1;
+    box-shadow:0 8px 24px -6px rgba(0,0,0,.7), inset 0 -3px 0 rgba(0,0,0,.12);transition:.2s}
+  #diceFace.rolling{animation:shake .12s linear infinite}
+  @keyframes shake{25%{transform:rotate(-7deg) translateY(-2px)}75%{transform:rotate(7deg) translateY(1px)}}
+  #rollBtn{padding:13px 34px;border:none;border-radius:12px;font-size:16px;font-weight:800;letter-spacing:3px;
+    font-family:inherit;cursor:pointer;color:#3a2400;transition:.2s;
+    background:linear-gradient(135deg,var(--gold),#ff9a3d);box-shadow:0 6px 22px -4px rgba(255,178,32,.55)}
+  #rollBtn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 10px 28px -4px rgba(255,178,32,.75)}
+  #rollBtn:disabled{background:#252b58;color:#5a6298;cursor:default;box-shadow:none}
+  #rollBtn.ready{animation:breath 1.6s ease-in-out infinite}
+  @keyframes breath{50%{box-shadow:0 6px 30px -2px rgba(255,201,77,.9)}}
+
+  /* ---------- toast & hint ---------- */
+  #toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%) translateY(16px);z-index:18;
+    background:var(--surface);border:1px solid var(--gold);color:var(--text);padding:10px 22px;border-radius:999px;
+    font-size:14px;font-weight:600;opacity:0;pointer-events:none;transition:.3s;white-space:nowrap;
+    box-shadow:0 0 24px -6px var(--gold)}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #hint{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:14;font-size:11px;color:#5a6298;
+    letter-spacing:1px;user-select:none;pointer-events:none;text-shadow:0 1px 4px #000}
+
+  /* ---------- overlays ---------- */
+  .overlay{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;
+    background:rgba(6,8,20,.72);backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:.35s}
+  .overlay.show{opacity:1;pointer-events:auto}
+  .panel{background:linear-gradient(160deg,#1b2148,#12163a);border:1px solid var(--line);border-radius:18px;
+    padding:30px 36px;max-width:440px;width:calc(100% - 40px);max-height:82vh;overflow-y:auto;
+    box-shadow:0 24px 80px -20px #000, 0 0 60px -30px var(--blue);transform:translateY(14px);transition:.35s}
+  .overlay.show .panel{transform:translateY(0)}
+  .panel::-webkit-scrollbar{width:6px}
+  .panel::-webkit-scrollbar-track{background:#101430}
+  .panel::-webkit-scrollbar-thumb{background:var(--blue);border-radius:3px}
+  .panel h2{font-size:22px;margin-bottom:14px;letter-spacing:2px}
+  .panel li{font-size:13px;color:var(--dim);line-height:1.9;margin-left:18px}
+  .panel li b{color:var(--text)}
+  .panel .btn{margin-top:18px}
+  #winPanel{text-align:center}
+  #winTrophy{font-size:56px;filter:drop-shadow(0 0 18px var(--gold));animation:trophy 2s ease-in-out infinite}
+  @keyframes trophy{50%{transform:translateY(-8px) rotate(4deg)}}
+  #winTitle{font-size:30px;font-weight:900;letter-spacing:3px;margin:10px 0 4px}
+  #winSub{color:var(--dim);font-size:13px;margin-bottom:16px}
+  .stats{display:flex;justify-content:center;gap:26px;margin:14px 0 6px}
+  .stat b{display:block;font-size:26px;color:var(--gold)}
+  .stat span{font-size:11px;color:var(--dim)}
+  .row{display:flex;gap:10px;justify-content:center}
+  .btn.primary{background:linear-gradient(135deg,var(--gold),#ff9a3d);color:#3a2400;border:none;font-weight:800}
+  .btn.primary:hover{color:#3a2400;filter:brightness(1.1)}
+
+  #loading{position:fixed;inset:0;z-index:60;background:var(--bg);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:18px;transition:opacity .6s}
+  #loading.hide{opacity:0;pointer-events:none}
+  .loadPlane{font-size:44px;animation:fly 1.6s ease-in-out infinite;filter:drop-shadow(0 0 14px var(--blue))}
+  @keyframes fly{50%{transform:translateY(-12px) rotate(-8deg)}}
+  #loading p{color:var(--dim);font-size:13px;letter-spacing:3px}
+  #loadErr{color:var(--red);font-size:13px;max-width:320px;text-align:center;display:none}
+
+  @media (max-width:760px){
+    #topbar{flex-wrap:wrap;gap:8px;padding:8px 10px}
+    .logo span{display:none}
+    .ctl label{display:none}
+    #players{left:8px;right:8px;top:96px;width:auto;flex-direction:row;gap:6px}
+    .pcard{flex:1;padding:6px 7px;border-left-width:3px}
+    .phead{font-size:11px}.phead .tag{display:none}
+    .pd{width:19px;height:17px;font-size:9px}
+    .pcap{display:none}
+    #log,#hint{display:none}
+    #dock{right:12px;bottom:12px}
+    #diceFace{width:50px;height:50px;font-size:34px}
+    #rollBtn{padding:11px 24px;font-size:14px}
+    #toast{bottom:88px;font-size:12px;max-width:88vw;white-space:normal;text-align:center}
+  }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+
+<header id="topbar">
+  <div class="logo"><b>✈ 星夜飞行棋</b><span>AERO LUDO</span></div>
+  <div id="turnPill"><i id="turnDot"></i><span id="turnText">准备起飞…</span></div>
+  <div class="spacer"></div>
+  <div class="ctl"><label>难度</label>
+    <select id="difficulty">
+      <option value="easy">简单 · 随机</option>
+      <option value="normal" selected>普通 · 进取</option>
+      <option value="hard">困难 · 老练</option>
+    </select>
+  </div>
+  <div class="ctl"><label>速度</label>
+    <select id="speed">
+      <option value="0.7">慢速</option>
+      <option value="1" selected>标准</option>
+      <option value="1.7">快速</option>
+    </select>
+  </div>
+  <button class="btn icon" id="soundBtn" title="声音开关">🔊</button>
+  <button class="btn icon" id="rulesBtn" title="规则">📖</button>
+  <button class="btn" id="restartBtn">↻ 重开</button>
+</header>
+
+<aside id="players"></aside>
+<div id="log"></div>
+
+<div id="dock">
+  <div id="diceFace">⚄</div>
+  <button id="rollBtn" disabled>掷骰子</button>
+</div>
+
+<div id="toast"></div>
+<div id="hint">点击发光飞机移动 · 拖拽旋转视角 · 滚轮缩放 · 空格掷骰</div>
+
+<div class="overlay" id="rulesOverlay">
+  <div class="panel">
+    <h2>📖 飞行棋规则</h2>
+    <ul>
+      <li><b>起飞</b>：掷出 <b>6</b> 才能把飞机从停机坪开上跑道，并<b>再掷一次</b>。</li>
+      <li><b>跳格</b>：停在<b>自己颜色</b>的格子上，向前跳 4 格。</li>
+      <li><b>飞行</b>：停在带 ✈ 标记的专属格，直接飞越棋盘捷径，落地后再跳 4 格。</li>
+      <li><b>吃子</b>：停在对手飞机所在格，把它<b>撞回停机坪</b>。</li>
+      <li><b>叠机</b>：自己的飞机停在同一格会叠在一起，之后<b>一起移动</b>。</li>
+      <li><b>终点</b>：绕场一周进入彩色航道，必须<b>恰好</b>抵达中心；点数超出会反弹后退。</li>
+      <li><b>胜利</b>：4 架飞机全部抵达中心即获胜。你执<b style="color:var(--red)">红方</b>，对抗三家 AI。</li>
+    </ul>
+    <button class="btn primary" id="rulesClose">明白了，起飞！</button>
+  </div>
+</div>
+
+<div class="overlay" id="winOverlay">
+  <div class="panel" id="winPanel">
+    <div id="winTrophy">🏆</div>
+    <div id="winTitle">红方胜利！</div>
+    <div id="winSub">四架飞机全部安全抵达中心塔台</div>
+    <div class="stats">
+      <div class="stat"><b id="stTurns">0</b><span>总轮数</span></div>
+      <div class="stat"><b id="stCap">0</b><span>你的击落</span></div>
+      <div class="stat"><b id="stLoss">0</b><span>你的损失</span></div>
+    </div>
+    <div class="row">
+      <button class="btn primary" id="againBtn">✈ 再来一局</button>
+      <button class="btn" id="viewBtn">复盘棋盘</button>
+    </div>
+  </div>
+</div>
+
+<div id="loading">
+  <div class="loadPlane">✈</div>
+  <p>正在铺设跑道…</p>
+  <div id="loadErr"></div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+/* ================= 常量与棋盘数据 ================= */
+const COLORS = [0xff4b3e, 0xffb020, 0x3d8bff, 0x35d46a];
+const CSSC   = ['#ff4b3e','#ffb020','#3d8bff','#35d46a'];
+const NAMES  = ['红方','黄方','蓝方','绿方'];
+const STARTS = [43, 4, 17, 30];
+const ENTRY  = [39, 0, 13, 26];
+const GOAL = 55;
+const OUTER = 48;
+
+const RING_PX = [
+  [320,51],[356,51],[392,51],[430,65],[445,104],[445,140],
+  [431,179],[460,208],[499,194],[535,194],[573,208],[588,247],
+  [588,283],[587,319],[588,355],[588,391],[573,430],[535,444],
+  [499,444],[430,458],[460,487],[445,497],[445,533],[430,572],
+  [392,587],[356,587],[320,587],[284,587],[248,587],[210,572],
+  [195,533],[195,497],[209,458],[180,429],[142,444],[106,444],
+  [67,430],[53,391],[53,355],[52,319],[52,283],[53,247],
+  [67,208],[106,194],[142,194],[180,207],[210,179],[195,140],
+  [195,104],[210,65],[248,51],[284,51]
+];
+const HOME_PX = [
+  [[106,319],[143,319],[179,319],[216,319],[253,319],[290,319]],
+  [[320,104],[320,141],[320,178],[320,215],[320,252],[320,288]],
+  [[535,319],[499,319],[462,319],[425,319],[388,319],[351,319]],
+  [[320,535],[320,499],[320,462],[320,425],[320,388],[320,349]]
+];
+const PAD_PX = [
+  [[74,74],[145,74],[74,145],[145,145]],
+  [[530,74],[590,74],[530,145],[590,145]],
+  [[530,530],[590,530],[530,590],[590,590]],
+  [[74,530],[145,530],[74,590],[145,590]]
+];
+const px = (x,y)=>[(x-320)/38,(y-319)/38];
+const ring = RING_PX.map(([x,y])=>px(x,y));
+const homeCells = HOME_PX.map(lane=>lane.map(([x,y])=>px(x,y)));
+const pads = PAD_PX.map(lane=>lane.map(([x,y])=>px(x,y)));
+const W = (i,j,y=0)=> new THREE.Vector3(i,y,j);
+
+const cellOwner = idx => [1,2,3,0][idx%4];
+const FLIGHT_TO = new Map([[6,46],[46,6],[7,19],[19,7],[20,32],[32,20],[33,45],[45,33]]);
+const absIdx = (p,s)=> (STARTS[p]+s)%52;
+const bounce = (s,r)=>{ const t=s+r; return t>GOAL ? 2*GOAL-t : t; };
+function chainDest(p,d){
+  if (d>OUTER || cellOwner(absIdx(p,d))!==p) return d;
+  const ai=absIdx(p,d);
+  if (FLIGHT_TO.has(ai)){
+    const land=(FLIGHT_TO.get(ai)-STARTS[p]+52)%52;
+    return land<=OUTER ? land+4 : land;
+  }
+  return d+4;
+}
+function posFor(p, step, idx){
+  if (step===-1){ const [i,j]=pads[p][idx]; return W(i,j,0.34); }
+  if (step<=OUTER){ const [i,j]=ring[absIdx(p,step)]; return W(i,j,0.34); }
+  if (step<GOAL){ const [i,j]=homeCells[p][step-OUTER-1]; return W(i,j,0.36); }
+  const a=(p*4+idx)/16*Math.PI*2;
+  return new THREE.Vector3(Math.cos(a)*0.72, 0.72, Math.sin(a)*0.72);
+}
+function dirFor(p, step, idx){
+  let a,b;
+  if (step===-1){ a=posFor(p,-1,idx); const [i,j]=ring[STARTS[p]]; b=W(i,j); }
+  else if (step<OUTER){ const [i1,j1]=ring[absIdx(p,step)], [i2,j2]=ring[(absIdx(p,step)+1)%52]; a=W(i1,j1); b=W(i2,j2); }
+  else if (step<GOAL){ a=posFor(p,step,idx); b=posFor(p,step+1,idx); }
+  else { const t=performance.now()/1000; const ang=(p*4+idx)/16*Math.PI*2+t*0.3; return new THREE.Vector3(-Math.sin(ang),0,Math.cos(ang)); }
+  return b.sub(a).setY(0).normalize();
+}
+
+/* ================= 渲染器 / 场景 ================= */
+const stage = document.getElementById('stage');
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
+} catch(e){
+  const el=document.getElementById('loadErr');
+  el.style.display='block'; el.textContent='当前浏览器不支持 WebGL，无法渲染 3D 棋盘。请更换现代浏览器后重试。';
+  throw e;
+}
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+renderer.setSize(Math.max(1,innerWidth), Math.max(1,innerHeight));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0d1e);
+scene.fog = new THREE.FogExp2(0x0a0d1e, 0.02);
+
+const camera = new THREE.PerspectiveCamera(50, Math.max(1,innerWidth)/Math.max(1,innerHeight), 0.1, 300);
+camera.position.set(0, 26, 30);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0, 0.6);
+controls.enableDamping = true; controls.dampingFactor = 0.06;
+controls.enablePan = false;
+controls.minDistance = 9; controls.maxDistance = 34;
+controls.minPolarAngle = 0.12; controls.maxPolarAngle = 1.32;
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(Math.max(1,innerWidth), Math.max(1,innerHeight)), 0.55, 0.55, 0.78);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+/* ---------- 灯光 ---------- */
+scene.add(new THREE.AmbientLight(0x39406e, 1.1));
+scene.add(new THREE.HemisphereLight(0x4f6bff, 0x2a1636, 0.55));
+const key = new THREE.DirectionalLight(0xfff1da, 2.0);
+key.position.set(9, 16, 7);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.camera.left=-12; key.shadow.camera.right=12;
+key.shadow.camera.top=12; key.shadow.camera.bottom=-12;
+key.shadow.camera.far=45; key.shadow.bias=-0.0004;
+scene.add(key);
+const rim = new THREE.DirectionalLight(0x4f7bff, 1.1); rim.position.set(-11, 9, -9); scene.add(rim);
+const warm = new THREE.PointLight(0xff5f9e, 22, 30, 1.8); warm.position.set(-7, 5, 9); scene.add(warm);
+const beaconLight = new THREE.PointLight(0xffc94d, 26, 14, 1.8); beaconLight.position.set(0, 2.6, 0); scene.add(beaconLight);
+
+/* ---------- 地面 / 星空 / 尘埃 ---------- */
+const ground = new THREE.Mesh(
+  new THREE.CircleGeometry(80, 48),
+  new THREE.MeshStandardMaterial({ color:0x0b0f24, roughness:0.95 })
+);
+ground.rotation.x = -Math.PI/2; ground.position.y = -0.62; ground.receiveShadow = true;
+scene.add(ground);
+
+const halo = new THREE.Mesh(
+  new THREE.TorusGeometry(11.4, 0.06, 8, 96),
+  new THREE.MeshStandardMaterial({ color:0x4f7bff, emissive:0x4f7bff, emissiveIntensity:1.6 })
+);
+halo.rotation.x = Math.PI/2; halo.position.y = -0.55; scene.add(halo);
+
+{
+  const n=900, pos=new Float32Array(n*3);
+  for(let i=0;i<n;i++){
+    const r=55+Math.random()*45, th=Math.random()*Math.PI*2, ph=Math.acos(Math.random()*1.6-0.6);
+    pos[i*3]=r*Math.sin(ph)*Math.cos(th); pos[i*3+1]=Math.abs(r*Math.cos(ph))*0.7+2; pos[i*3+2]=r*Math.sin(ph)*Math.sin(th);
+  }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  const m=new THREE.PointsMaterial({ color:0xbfd0ff, size:0.55, transparent:true, opacity:0.85, fog:false });
+  scene.add(new THREE.Points(g,m));
+}
+const dust = (()=>{
+  const n=320, pos=new Float32Array(n*3), spd=new Float32Array(n);
+  for(let i=0;i<n;i++){ pos[i*3]=(Math.random()-0.5)*44; pos[i*3+1]=Math.random()*13; pos[i*3+2]=(Math.random()-0.5)*44; spd[i]=0.1+Math.random()*0.3; }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  const m=new THREE.PointsMaterial({ color:0x8fa8ff, size:0.07, transparent:true, opacity:0.4, blending:THREE.AdditiveBlending, depthWrite:false });
+  const pts=new THREE.Points(g,m); pts.userData={spd}; scene.add(pts); return pts;
+})();
+
+/* ================= 棋盘 ================= */
+const board = new THREE.Group(); scene.add(board);
+const cellGeo = new RoundedBoxGeometry(0.9, 0.14, 0.9, 2, 0.05);
+const homeGeo = new RoundedBoxGeometry(0.9, 0.18, 0.9, 2, 0.05);
+const discGeo = new THREE.CircleGeometry(0.32, 28);
+const discMat = new THREE.MeshStandardMaterial({ color:0xf7f8ff, roughness:0.55, metalness:0.05 });
+const cellMats = COLORS.map(c=> new THREE.MeshStandardMaterial({ color:c, roughness:0.42, metalness:0.15, emissive:c, emissiveIntensity:0.14 }));
+const entranceCells = [];
+
+const base = new THREE.Mesh(new RoundedBoxGeometry(16.35, 0.6, 16.35, 3, 0.18),
+  new THREE.MeshStandardMaterial({ color:0x151a3c, roughness:0.85 }));
+base.position.y = -0.3; base.receiveShadow = true; board.add(base);
+
+function decalTexture(draw){
+  const cv=document.createElement('canvas'); cv.width=cv.height=128;
+  draw(cv.getContext('2d'));
+  const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; return t;
+}
+const planeIconTex = decalTexture(ctx=>{
+  ctx.translate(64,64); ctx.fillStyle='#fff';
+  ctx.beginPath();
+  ctx.moveTo(0,-46); ctx.quadraticCurveTo(9,-30,8,-12); ctx.lineTo(44,14); ctx.lineTo(44,26); ctx.lineTo(7,16);
+  ctx.lineTo(5,34); ctx.lineTo(18,44); ctx.lineTo(18,52); ctx.lineTo(0,47); ctx.lineTo(-18,52); ctx.lineTo(-18,44);
+  ctx.lineTo(-5,34); ctx.lineTo(-7,16); ctx.lineTo(-44,26); ctx.lineTo(-44,14); ctx.lineTo(-8,-12);
+  ctx.quadraticCurveTo(-9,-30,0,-46); ctx.fill();
+});
+const ANG = [0, -Math.PI/2, Math.PI, Math.PI/2];
+function arrowPath(ctx){
+  ctx.beginPath();
+  ctx.moveTo(-40,-13); ctx.lineTo(6,-13); ctx.lineTo(6,-32); ctx.lineTo(46,0);
+  ctx.lineTo(6,32); ctx.lineTo(6,13); ctx.lineTo(-40,13); ctx.closePath();
+}
+const arrowTex = COLORS.map(c=>decalTexture(ctx=>{
+  ctx.translate(64,64); ctx.fillStyle='#'+new THREE.Color(c).getHexString();
+  arrowPath(ctx); ctx.fill();
+}));
+const takeoffTex = COLORS.map(c=>decalTexture(ctx=>{
+  ctx.translate(64,64); ctx.fillStyle='#'+new THREE.Color(c).getHexString();
+  ctx.save(); ctx.translate(-28,0); ctx.scale(0.6,0.6);
+  ctx.beginPath();
+  ctx.moveTo(0,-46); ctx.quadraticCurveTo(9,-30,8,-12); ctx.lineTo(44,14); ctx.lineTo(44,26); ctx.lineTo(7,16);
+  ctx.lineTo(5,34); ctx.lineTo(18,44); ctx.lineTo(18,52); ctx.lineTo(0,47); ctx.lineTo(-18,52); ctx.lineTo(-18,44);
+  ctx.lineTo(-5,34); ctx.lineTo(-7,16); ctx.lineTo(-44,26); ctx.lineTo(-44,14); ctx.lineTo(-8,-12);
+  ctx.quadraticCurveTo(-9,-30,0,-46); ctx.fill();
+  ctx.restore();
+  ctx.save(); ctx.translate(30,0); ctx.scale(0.62,0.62); arrowPath(ctx); ctx.fill(); ctx.restore();
+}));
+function addDecal(tex, x, z, size=0.62, y=0.155, parent=board){
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(size,size),
+    new THREE.MeshBasicMaterial({ map:tex, transparent:true, opacity:0.92, depthWrite:false }));
+  m.rotation.x=-Math.PI/2; m.position.set(x,y,z); parent.add(m); return m;
+}
+function addTrackCell(i,j,owner,{start=false,flight=false,home=false,entry=false,k=0}={}){
+  const group=new THREE.Group(); group.position.copy(W(i,j,0)); board.add(group);
+  const mat=(start||flight)?cellMats[owner].clone():cellMats[owner];
+  if(start) mat.emissiveIntensity=0.3;
+  if(flight) mat.emissiveIntensity=0.55;
+  if(home) mat.emissiveIntensity=0.10+k*0.045;
+  const tile=new THREE.Mesh(home?homeGeo:cellGeo,mat);
+  tile.position.y=home?0.09:0.07; tile.receiveShadow=true; group.add(tile);
+  if(!flight){
+    const disc=new THREE.Mesh(discGeo,discMat);
+    disc.rotation.x=-Math.PI/2; disc.position.y=home?0.186:0.146; disc.receiveShadow=true; group.add(disc);
+  }
+  if(entry){ const d=addDecal(arrowTex[owner],0,0,0.5,0.154,group); d.rotation.z=ANG[owner]; }
+  if(flight) addDecal(planeIconTex,0,0,0.58,home?0.194:0.154,group);
+  group.scale.setScalar(0.001); entranceCells.push(group); return mat;
+}
+function addTriangle(points,color){
+  const pos=[];
+  points.forEach(([x,y])=>{ const [i,j]=px(x,y); pos.push(i,0.025,j); });
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  geo.setIndex([0,1,2]); geo.computeVertexNormals();
+  const mesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color,roughness:0.55,metalness:0.08,side:THREE.DoubleSide}));
+  mesh.receiveShadow=true; board.add(mesh);
+}
+
+addTriangle([[417,166],[486,166],[417,235]],COLORS[3]);
+addTriangle([[486,166],[486,235],[417,235]],COLORS[0]);
+addTriangle([[167,166],[236,166],[167,235]],COLORS[2]);
+addTriangle([[236,166],[236,235],[167,235]],COLORS[3]);
+addTriangle([[417,445],[486,445],[417,514]],COLORS[0]);
+addTriangle([[486,445],[486,514],[417,514]],COLORS[1]);
+addTriangle([[167,416],[236,416],[167,485]],COLORS[2]);
+addTriangle([[236,416],[236,485],[167,485]],COLORS[1]);
+addTriangle([[282,235],[358,235],[320,302]],COLORS[1]);
+addTriangle([[405,281],[405,357],[338,319]],COLORS[2]);
+addTriangle([[358,403],[282,403],[320,336]],COLORS[3]);
+addTriangle([[235,357],[235,281],[302,319]],COLORS[0]);
+
+const flightCells = [];
+for (let idx=0; idx<52; idx++){
+  const [i,j]=ring[idx], owner=cellOwner(idx);
+  const mat=addTrackCell(i,j,owner,{start:STARTS.includes(idx),flight:FLIGHT_TO.has(idx),entry:ENTRY.includes(idx)});
+  if(FLIGHT_TO.has(idx)) flightCells.push(mat);
+}
+/* 边距起飞标识与白底方向箭头（对照参考图） */
+[[35,180,0],[450,35,1],[600,450,2],[180,600,3]].forEach(([x,y,p])=>{
+  const [i,j]=px(x,y); const d=addDecal(takeoffTex[p],i,j,1.5,0.02); d.rotation.z=ANG[p];
+});
+[[265,180,3,0],[375,180,3,0],[180,265,2,Math.PI/2],[180,375,2,Math.PI/2],
+ [460,265,0,-Math.PI/2],[460,375,0,-Math.PI/2],[265,460,1,Math.PI],[375,460,1,Math.PI]]
+.forEach(([x,y,p,r])=>{ const [i,j]=px(x,y); const d=addDecal(arrowTex[p],i,j,0.5,0.02); d.rotation.z=r; });
+for (let p=0;p<4;p++){
+  homeCells[p].forEach(([i,j],k)=>addTrackCell(i,j,p,{home:true,k}));
+  const cx=pads[p].reduce((s,[i])=>s+i,0)/4, cz=pads[p].reduce((s,[,j])=>s+j,0)/4;
+  const plate = new THREE.Mesh(new RoundedBoxGeometry(3.85, 0.1, 3.85, 2, 0.12),
+    new THREE.MeshStandardMaterial({ color:new THREE.Color(COLORS[p]).multiplyScalar(0.24), roughness:0.8, emissive:COLORS[p], emissiveIntensity:0.06 }));
+  plate.position.copy(W(cx,cz,0.02)); plate.receiveShadow=true; board.add(plate);
+  pads[p].forEach(([i,j])=>{
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.56,0.6,0.12,24),
+      new THREE.MeshStandardMaterial({ color:0x10143a, roughness:0.6 }));
+    pad.position.copy(W(i,j,0.1)); pad.receiveShadow=true; board.add(pad);
+    const ringM = new THREE.Mesh(new THREE.TorusGeometry(0.52,0.035,8,32),
+      new THREE.MeshStandardMaterial({ color:COLORS[p], emissive:COLORS[p], emissiveIntensity:0.7 }));
+    ringM.rotation.x=Math.PI/2; ringM.position.copy(W(i,j,0.17)); board.add(ringM);
+  });
+}
+
+/* 中心塔台 */
+const podium = new THREE.Mesh(new THREE.CylinderGeometry(0.92, 1.04, 0.34, 32),
+  new THREE.MeshStandardMaterial({ color:0x2a2450, roughness:0.4, metalness:0.5, emissive:0xffc94d, emissiveIntensity:0.12 }));
+podium.position.y=0.17; podium.receiveShadow=true; board.add(podium);
+const podiumRing = new THREE.Mesh(new THREE.TorusGeometry(0.94, 0.045, 8, 64),
+  new THREE.MeshStandardMaterial({ color:0xffc94d, emissive:0xffc94d, emissiveIntensity:1.4 }));
+podiumRing.rotation.x=Math.PI/2; podiumRing.position.y=0.35; board.add(podiumRing);
+const beacon = new THREE.Mesh(new THREE.OctahedronGeometry(0.36),
+  new THREE.MeshStandardMaterial({ color:0xffc94d, emissive:0xffc94d, emissiveIntensity:1.8, metalness:0.6, roughness:0.2 }));
+beacon.position.y=2.5; board.add(beacon);
+const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.5, 4.4, 16, 1, true),
+  new THREE.MeshBasicMaterial({ color:0xffc94d, transparent:true, opacity:0.12, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide }));
+beam.position.y=2.4; board.add(beam);
+
+/* 角落塔灯 */
+const cornerLights=[];
+[[-7.7,-7.7,0],[7.7,-7.7,1],[-7.7,7.7,3],[7.7,7.7,2]].forEach(([x,z,p])=>{
+  const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.1,1.1,8),
+    new THREE.MeshStandardMaterial({color:0x2c3468,roughness:0.6}));
+  pole.position.set(x,0.55,z); board.add(pole);
+  const lamp=new THREE.Mesh(new THREE.SphereGeometry(0.13,12,12),
+    new THREE.MeshStandardMaterial({color:COLORS[p],emissive:COLORS[p],emissiveIntensity:1.5}));
+  lamp.position.set(x,1.2,z); board.add(lamp); cornerLights.push(lamp);
+});
+
+/* ================= 飞机 ================= */
+const planeGeos = {
+  body: new THREE.CapsuleGeometry(0.155, 0.52, 4, 12),
+  canopy: new THREE.SphereGeometry(0.11, 12, 10),
+  wing: new THREE.BoxGeometry(0.52, 0.035, 0.2),
+  tail: new THREE.BoxGeometry(0.24, 0.03, 0.12),
+  fin: new THREE.BoxGeometry(0.035, 0.24, 0.15),
+  engine: new THREE.SphereGeometry(0.07, 10, 8),
+  stripe: new THREE.BoxGeometry(0.05, 0.02, 0.5),
+};
+const planeMats = COLORS.map(c=>({
+  body: new THREE.MeshStandardMaterial({ color:c, roughness:0.32, metalness:0.35 }),
+  wing: new THREE.MeshStandardMaterial({ color:0xf2f5ff, roughness:0.4, metalness:0.25 }),
+  dark: new THREE.MeshStandardMaterial({ color:0x141838, roughness:0.15, metalness:0.7 }),
+  glow: new THREE.MeshStandardMaterial({ color:c, emissive:c, emissiveIntensity:2.2 }),
+}));
+function buildPlaneModel(p){
+  const M=planeMats[p], g=new THREE.Group();
+  const add=(geo,mat,x,y,z,rx=0,ry=0,rz=0,sx=1,sy=1,sz=1)=>{
+    const m=new THREE.Mesh(geo,mat); m.position.set(x,y,z); m.rotation.set(rx,ry,rz); m.scale.set(sx,sy,sz);
+    m.castShadow=true; g.add(m); return m;
+  };
+  add(planeGeos.body, M.body, 0,0.18,0, Math.PI/2);
+  add(planeGeos.canopy, M.dark, 0,0.29,0.12, 0,0,0, 0.85,0.7,1.5);
+  add(planeGeos.wing, M.wing, -0.3,0.17,-0.04, 0, 0.3);
+  add(planeGeos.wing, M.wing,  0.3,0.17,-0.04, 0,-0.3);
+  add(planeGeos.tail, M.wing, -0.14,0.2,-0.4, 0, 0.25);
+  add(planeGeos.tail, M.wing,  0.14,0.2,-0.4, 0,-0.25);
+  add(planeGeos.fin, M.body, 0,0.33,-0.42, -0.25);
+  add(planeGeos.engine, M.glow, 0,0.18,-0.48);
+  add(planeGeos.stripe, M.wing, 0,0.335,-0.05);
+  g.scale.setScalar(0.92);
+  return g;
+}
+
+const G = {
+  epoch:0, phase:'boot', turn:0, dice:0, turns:1,
+  planes:[], legal:[], highlights:[], captures:[0,0,0,0], losses:[0,0,0,0],
+  winner:null, speed:1, difficulty:'normal', muted:false, nextDice:null,
+};
+for (let p=0;p<4;p++) for (let i=0;i<4;i++){
+  const root=new THREE.Group(), model=buildPlaneModel(p);
+  root.add(model);
+  root.position.copy(posFor(p,-1,i));
+  const d=dirFor(p,-1,i); root.rotation.y=Math.atan2(d.x,d.z);
+  root.userData.plane={ owner:p, idx:i, step:-1, root, model };
+  G.planes.push(root.userData.plane);
+  scene.add(root);
+}
+const hangarPlanes = p=>G.planes.filter(x=>x.owner===p&&x.step===-1);
+const activePlanes = p=>G.planes.filter(x=>x.owner===p&&x.step>=0&&x.step<GOAL);
+const finishedPlanes = p=>G.planes.filter(x=>x.owner===p&&x.step===GOAL);
+const planesAtStep = (p,s)=>G.planes.filter(x=>x.owner===p&&x.step===s);
+
+/* 选中光环 & 目的地预览 */
+const ringGeo = new THREE.TorusGeometry(0.44, 0.045, 8, 36);
+const marker = new THREE.Group();
+{
+  const disc=new THREE.Mesh(new THREE.CircleGeometry(0.4,24),
+    new THREE.MeshBasicMaterial({ color:0xffc94d, transparent:true, opacity:0.35, depthWrite:false }));
+  disc.rotation.x=-Math.PI/2;
+  const rr=new THREE.Mesh(new THREE.TorusGeometry(0.42,0.035,8,36),
+    new THREE.MeshStandardMaterial({ color:0xffc94d, emissive:0xffc94d, emissiveIntensity:1.6 }));
+  rr.rotation.x=Math.PI/2;
+  marker.add(disc,rr); marker.visible=false; marker.position.y=0.18; scene.add(marker);
+}
+
+/* ================= 骰子 ================= */
+const PIPS = {1:[[1,1]],2:[[0,0],[2,2]],3:[[0,0],[1,1],[2,2]],4:[[0,0],[0,2],[2,0],[2,2]],5:[[0,0],[0,2],[1,1],[2,0],[2,2]],6:[[0,0],[0,1],[0,2],[2,0],[2,1],[2,2]]};
+function diceFaceTex(v){
+  const cv=document.createElement('canvas'); cv.width=cv.height=128; const ctx=cv.getContext('2d');
+  ctx.fillStyle='#f7f2e4'; ctx.fillRect(0,0,128,128);
+  ctx.strokeStyle='#d8cfb4'; ctx.lineWidth=6; ctx.strokeRect(3,3,122,122);
+  ctx.fillStyle='#1a1f45';
+  PIPS[v].forEach(([a,b])=>{ ctx.beginPath(); ctx.arc(32+a*32,32+b*32,11,0,Math.PI*2); ctx.fill(); });
+  const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; return t;
+}
+const faceOrder=[1,6,2,5,3,4];
+const dice=new THREE.Mesh(new RoundedBoxGeometry(1.05,1.05,1.05,3,0.12),
+  faceOrder.map(v=>new THREE.MeshStandardMaterial({ map:diceFaceTex(v), roughness:0.35 })));
+const DICE_POS=new THREE.Vector3(0, 2.6, 9.6);
+dice.position.copy(DICE_POS); dice.castShadow=true; scene.add(dice);
+const FACE_NORMAL={1:new THREE.Vector3(1,0,0),6:new THREE.Vector3(-1,0,0),2:new THREE.Vector3(0,1,0),5:new THREE.Vector3(0,-1,0),3:new THREE.Vector3(0,0,1),4:new THREE.Vector3(0,0,-1)};
+function faceQuat(v){
+  const q=new THREE.Quaternion().setFromUnitVectors(FACE_NORMAL[v], new THREE.Vector3(0,1,0));
+  const yaw=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), Math.random()*Math.PI*2);
+  return yaw.multiply(q);
+}
+let diceBusy=false, diceIdleSpin=true;
+
+/* ================= 粒子爆发 ================= */
+const bursts=[];
+function burst(pos, color, n=46, power=3.2){
+  const g=new THREE.BufferGeometry(), p=new Float32Array(n*3), v=[];
+  for(let i=0;i<n;i++){
+    p[i*3]=pos.x; p[i*3+1]=pos.y; p[i*3+2]=pos.z;
+    const th=Math.random()*Math.PI*2, ph=Math.acos(Math.random()*2-1), s=power*(0.4+Math.random());
+    v.push(new THREE.Vector3(s*Math.sin(ph)*Math.cos(th), Math.abs(s*Math.cos(ph))*0.9+1.2, s*Math.sin(ph)*Math.sin(th)));
+  }
+  g.setAttribute('position', new THREE.BufferAttribute(p,3));
+  const m=new THREE.PointsMaterial({ color, size:0.14, transparent:true, opacity:1, blending:THREE.AdditiveBlending, depthWrite:false });
+  const pts=new THREE.Points(g,m); scene.add(pts);
+  bursts.push({pts,v,life:0,max:0.9});
+}
+
+/* ================= 音效 ================= */
+let AC=null, master=null;
+function ensureAudio(){
+  if (AC) return;
+  try{ AC=new (window.AudioContext||window.webkitAudioContext)(); master=AC.createGain(); master.gain.value=G.muted?0:0.5; master.connect(AC.destination); }catch(e){}
+}
+function tone(freq, dur, type='sine', vol=0.2, slide=0, when=0){
+  if(!AC||G.muted) return;
+  const t=AC.currentTime+when, o=AC.createOscillator(), g=AC.createGain();
+  o.type=type; o.frequency.setValueAtTime(freq,t);
+  if(slide) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+slide), t+dur);
+  g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+dur+0.02);
+}
+function noise(dur, vol=0.2, freq=1200, when=0){
+  if(!AC||G.muted) return;
+  const t=AC.currentTime+when, len=AC.sampleRate*dur, buf=AC.createBuffer(1,len,AC.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*(1-i/len);
+  const src=AC.createBufferSource(); src.buffer=buf;
+  const f=AC.createBiquadFilter(); f.type='lowpass'; f.frequency.value=freq;
+  const g=AC.createGain(); g.gain.value=vol;
+  src.connect(f); f.connect(g); g.connect(master); src.start(t);
+}
+const SFX={
+  click:()=>tone(1150,0.05,'square',0.08),
+  tick:()=>tone(660+Math.random()*120,0.05,'square',0.06,-160),
+  dice:()=>{ for(let i=0;i<6;i++) noise(0.05,0.14,2600,i*0.09); tone(170,0.14,'sine',0.3,-60,0.62); },
+  takeoff:()=>{ noise(0.4,0.2,900); tone(280,0.45,'sawtooth',0.1,420); },
+  jump:()=>{ tone(880,0.12,'sine',0.18); tone(1320,0.18,'sine',0.16,0,0.09); },
+  fly:()=>{ tone(300,0.7,'sawtooth',0.12,700); noise(0.6,0.12,1600); },
+  boom:()=>{ noise(0.35,0.35,500); tone(95,0.35,'sine',0.35,-40); },
+  finish:()=>[523,659,784,1047].forEach((f,i)=>tone(f,0.22,'triangle',0.18,0,i*0.09)),
+  win:()=>{ [523,659,784,1047,784,1047,1319].forEach((f,i)=>tone(f,0.3,'triangle',0.2,0,i*0.14)); [262,330,392].forEach((f,i)=>tone(f,0.9,'sine',0.12,0,i*0.14)); },
+  lose:()=>[392,330,262,196].forEach((f,i)=>tone(f,0.3,'triangle',0.16,0,i*0.16)),
+  pass:()=>tone(300,0.18,'sine',0.12,-80),
+};
+
+/* ================= 补间引擎 ================= */
+const tweens=new Set();
+const easeIO=t=>t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+const easeOut=t=>1-Math.pow(1-t,3);
+const easeBack=t=>{const c=1.70158;return 1+(c+1)*Math.pow(t-1,3)+c*Math.pow(t-1,2);};
+function tween(dur,fn,ease=easeIO){
+  return new Promise(res=>{ tweens.add({t:0,dur:Math.max(16,dur),fn,ease,res}); });
+}
+function flushTweens(){ tweens.forEach(tw=>tw.res()); tweens.clear(); }
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+const sp=ms=>ms/G.speed;
+
+/* ================= UI ================= */
+const $=id=>document.getElementById(id);
+const playersEl=$('players'), logEl=$('log'), toastEl=$('toast');
+const DICE_CH=['⚀','⚁','⚂','⚃','⚄','⚅'];
+playersEl.innerHTML = NAMES.map((n,p)=>`
+  <div class="pcard" id="pc${p}" style="--pc:${CSSC[p]}">
+    <div class="phead"><span style="color:${CSSC[p]}">●</span>${n}${p===0?'（你）':''}<span class="tag">${p===0?'玩家':'AI'}</span></div>
+    <div class="pdots">${[0,1,2,3].map(i=>`<div class="pd" id="pd${p}_${i}">✈</div>`).join('')}</div>
+    <div class="pcap">击落 <b id="cap${p}">0</b> · 抵达 <b id="fin${p}">0</b>/4</div>
+  </div>`).join('');
+
+function updateUI(){
+  for(let p=0;p<4;p++){
+    $('pc'+p).classList.toggle('active', G.turn===p && G.phase!=='over' && G.phase!=='boot');
+    for(let i=0;i<4;i++){
+      const pl=G.planes[p*4+i], el=$(`pd${p}_${i}`);
+      el.className='pd '+(pl.step===GOAL?'done':pl.step>OUTER?'home':pl.step>=0?'fly':'');
+      el.textContent = pl.step===GOAL?'★':'✈';
+    }
+    $('cap'+p).textContent=G.captures[p];
+    $('fin'+p).textContent=finishedPlanes(p).length;
+  }
+  const dot=$('turnDot'), txt=$('turnText'), pill=$('turnPill');
+  dot.style.background=CSSC[G.turn]; dot.style.color=CSSC[G.turn];
+  pill.style.borderColor=CSSC[G.turn]+'66';
+  if (G.phase==='over'){ txt.textContent=`${NAMES[G.winner]}获胜！`; }
+  else if (G.turn===0){
+    txt.textContent = G.phase==='awaitRoll'?'轮到你了 · 请掷骰子': G.phase==='choose'?'点击发光的飞机移动': G.phase==='rolling'?'骰子滚动中…':'红方行动中…';
+  } else {
+    txt.textContent = G.phase==='awaitRoll'||G.phase==='rolling'?`${NAMES[G.turn]}掷骰中…`:`${NAMES[G.turn]}思考中…`;
+  }
+  const btn=$('rollBtn');
+  const ready = G.phase==='awaitRoll' && G.turn===0;
+  btn.disabled=!ready;
+  btn.classList.toggle('ready',ready);
+  btn.textContent = ready?'掷骰子': G.phase==='over'?'已结束': G.turn===0?'行动中…':`${NAMES[G.turn]}回合`;
+  $('diceFace').textContent = G.dice?DICE_CH[G.dice-1]:'⚄';
+}
+let toastTimer=null;
+function toast(msg, ms=1800){
+  toastEl.textContent=msg; toastEl.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>toastEl.classList.remove('show'), ms);
+}
+function log(html){
+  const div=document.createElement('div');
+  div.innerHTML=`<span class="t">R${G.turns}</span>${html}`;
+  logEl.prepend(div);
+  while(logEl.children.length>40) logEl.lastChild.remove();
+}
+const pname=p=>`<span class="c${p}">${NAMES[p]}</span>`;
+
+/* ================= 布局与朝向 ================= */
+function layoutPlanes(anim=true){
+  const groups={};
+  G.planes.forEach(pl=>{
+    if(pl.step===GOAL) return;
+    const key = pl.step===-1 ? `pad${pl.owner}_${pl.idx}` : pl.step<=OUTER ? `t${absIdx(pl.owner,pl.step)}` : `h${pl.owner}_${pl.step}`;
+    (groups[key]=groups[key]||[]).push(pl);
+  });
+  const jobs=[];
+  Object.values(groups).forEach(list=>{
+    list.forEach((pl,k)=>{
+      const base=posFor(pl.owner,pl.step,pl.idx);
+      if(list.length>1){ const a=k/list.length*Math.PI*2; base.x+=Math.cos(a)*0.2; base.z+=Math.sin(a)*0.2; }
+      const d=dirFor(pl.owner,pl.step,pl.idx);
+      const yaw=Math.atan2(d.x,d.z);
+      const from=pl.root.position.clone(), fromYaw=pl.root.rotation.y;
+      let dy=yaw-fromYaw; while(dy>Math.PI)dy-=Math.PI*2; while(dy<-Math.PI)dy+=Math.PI*2;
+      if(anim) jobs.push(tween(sp(220),e=>{ pl.root.position.lerpVectors(from,base,e); pl.root.rotation.y=fromYaw+dy*e; }));
+      else { pl.root.position.copy(base); pl.root.rotation.y=yaw; }
+    });
+  });
+  return Promise.all(jobs);
+}
+
+/* ================= 高亮 / 拾取 ================= */
+function clearHighlights(){
+  G.highlights.forEach(h=>{ scene.remove(h); h.material.dispose(); });
+  G.highlights=[]; marker.visible=false;
+}
+function showHighlights(){
+  clearHighlights();
+  G.legal.forEach(m=>{
+    m.planes.forEach(pl=>{
+      const mat=new THREE.MeshStandardMaterial({ color:COLORS[pl.owner], emissive:COLORS[pl.owner], emissiveIntensity:1.7, transparent:true, opacity:0.95 });
+      const h=new THREE.Mesh(ringGeo,mat);
+      h.rotation.x=Math.PI/2;
+      h.position.copy(pl.root.position).setY(0.17);
+      h.userData.plane=pl;
+      scene.add(h); G.highlights.push(h);
+    });
+  });
+}
+const raycaster=new THREE.Raycaster(), pointer=new THREE.Vector2();
+let hovered=null, downPos=null;
+function pickPlane(cx,cy){
+  const r=renderer.domElement.getBoundingClientRect();
+  pointer.set(((cx-r.left)/r.width)*2-1, -((cy-r.top)/r.height)*2+1);
+  raycaster.setFromCamera(pointer,camera);
+  const roots=G.planes.map(p=>p.root);
+  const hits=raycaster.intersectObjects(roots,true);
+  if(!hits.length) return null;
+  let o=hits[0].object;
+  while(o && !o.userData.plane) o=o.parent;
+  return o?o.userData.plane:null;
+}
+function moveForPlane(pl){
+  return G.legal.find(m=>m.planes.includes(pl))||null;
+}
+renderer.domElement.addEventListener('pointerdown',e=>{ downPos=[e.clientX,e.clientY]; ensureAudio(); });
+renderer.domElement.addEventListener('pointerup',e=>{
+  if(!downPos) return;
+  const dx=e.clientX-downPos[0], dy=e.clientY-downPos[1]; downPos=null;
+  if(dx*dx+dy*dy>36) return;
+  if(G.phase!=='choose'||G.turn!==0) return;
+  const pl=pickPlane(e.clientX,e.clientY);
+  if(!pl) return;
+  const m=moveForPlane(pl);
+  if(m){ SFX.click(); performMove(m); }
+});
+renderer.domElement.addEventListener('pointermove',e=>{
+  if(G.phase!=='choose'||G.turn!==0){ hovered=null; marker.visible=false; renderer.domElement.style.cursor=''; return; }
+  const pl=pickPlane(e.clientX,e.clientY);
+  const m=pl?moveForPlane(pl):null;
+  hovered=m?pl:null;
+  renderer.domElement.style.cursor=m?'pointer':'';
+  if(m){
+    const d = m.type==='takeoff'?0:chainDest(0,m.dest);
+    const p = d===GOAL?new THREE.Vector3(0,0.18,0):posFor(0,d,0).setY(0.18);
+    marker.position.copy(p); marker.visible=true;
+  } else marker.visible=false;
+});
+
+/* ================= 游戏流程 ================= */
+function legalMoves(p,r){
+  const ms=[];
+  if(r===6) hangarPlanes(p).forEach(pl=>ms.push({type:'takeoff',planes:[pl],dest:0,from:-1}));
+  const seen=new Set();
+  activePlanes(p).forEach(pl=>{
+    if(seen.has(pl.step)) return; seen.add(pl.step);
+    ms.push({type:'move',planes:planesAtStep(p,pl.step),dest:bounce(pl.step,r),from:pl.step});
+  });
+  return ms;
+}
+function pathSteps(from,r){
+  const t=from+r, arr=[];
+  if(t<=GOAL){ for(let s=from+1;s<=t;s++) arr.push(s); }
+  else { for(let s=from+1;s<=GOAL;s++) arr.push(s); for(let s=GOAL-1;s>=2*GOAL-t;s--) arr.push(s); }
+  return arr;
+}
+function groupOffset(k,n){
+  if(n<=1) return new THREE.Vector3();
+  const a=k/n*Math.PI*2; return new THREE.Vector3(Math.cos(a)*0.2,0,Math.sin(a)*0.2);
+}
+async function hopGroup(pls, step, big=false){
+  const e0=G.epoch;
+  const froms=pls.map(pl=>pl.root.position.clone());
+  const tos=pls.map((pl,k)=>posFor(pl.owner,step,pl.idx).add(groupOffset(k,pls.length)));
+  const d=dirFor(pls[0].owner,step,pls[0].idx), yaw=Math.atan2(d.x,d.z);
+  const fromYaws=pls.map(pl=>pl.root.rotation.y);
+  pls.forEach(pl=>pl.step=step);
+  SFX[big?'jump':'tick']();
+  await tween(sp(big?300:165),(e,k)=>{
+    pls.forEach((pl,i)=>{
+      pl.root.position.lerpVectors(froms[i],tos[i],e);
+      pl.root.position.y += Math.sin(k*Math.PI)*(big?0.85:0.45);
+      let dy=yaw-fromYaws[i]; while(dy>Math.PI)dy-=Math.PI*2; while(dy<-Math.PI)dy+=Math.PI*2;
+      pl.root.rotation.y=fromYaws[i]+dy*Math.min(1,k*2);
+    });
+  },easeIO);
+  if(e0!==G.epoch) return false;
+  if(big) burst(tos[0].clone().setY(0.3), COLORS[pls[0].owner], 20, 1.6);
+  return true;
+}
+async function flyGroup(pls, step){
+  const e0=G.epoch;
+  const froms=pls.map(pl=>pl.root.position.clone());
+  const tos=pls.map((pl,k)=>posFor(pl.owner,step,pl.idx).add(groupOffset(k,pls.length)));
+  const d=dirFor(pls[0].owner,step,pls[0].idx), yaw=Math.atan2(d.x,d.z);
+  pls.forEach(pl=>pl.step=step);
+  SFX.fly();
+  toast('✈ 触发飞行捷径！');
+  log(`${pname(pls[0].owner)} 触发 <span class="g">飞行捷径</span>，横跨棋盘！`);
+  await tween(sp(950),(e,k)=>{
+    pls.forEach((pl,i)=>{
+      pl.root.position.lerpVectors(froms[i],tos[i],e);
+      pl.root.position.y += Math.sin(k*Math.PI)*3.4;
+      pl.root.rotation.y=yaw;
+      pl.model.rotation.z=Math.sin(k*Math.PI*2)*0.45;
+      if(Math.random()<0.35) burst(pl.root.position, COLORS[pl.owner], 3, 0.5);
+    });
+  },easeIO);
+  pls.forEach(pl=>pl.model.rotation.z=0);
+  return e0===G.epoch;
+}
+async function applyChain(pls, dest){
+  if(dest>OUTER) return dest;
+  const p=pls[0].owner, ai=absIdx(p,dest);
+  if(cellOwner(ai)!==p) return dest;
+  if(FLIGHT_TO.has(ai)){
+    const land=(FLIGHT_TO.get(ai)-STARTS[p]+52)%52;
+    if(!await flyGroup(pls,land)) return -999;
+    if(land<=OUTER){
+      if(!await hopGroup(pls,land+4,true)) return -999;
+      log(`${pname(p)} 飞行后跳格至第 ${land+4} 步`);
+      return land+4;
+    }
+    return land;
+  }
+  toast('同色跳格 +4！');
+  if(!await hopGroup(pls,dest+4,true)) return -999;
+  return dest+4;
+}
+async function capturePlane(victim, byOwner){
+  const e0=G.epoch;
+  G.captures[byOwner]++; G.losses[victim.owner]++;
+  SFX.boom();
+  burst(victim.root.position.clone(), COLORS[victim.owner], 60, 4);
+  burst(victim.root.position.clone(), 0xffc94d, 30, 2.5);
+  log(`${pname(byOwner)} <span class="g">击落</span> ${pname(victim.owner)} 的飞机！`);
+  toast(`💥 ${NAMES[byOwner]}击落了${NAMES[victim.owner]}的飞机！`);
+  victim.step=-1;
+  const from=victim.root.position.clone(), to=posFor(victim.owner,-1,victim.idx);
+  const fromYaw=victim.root.rotation.y;
+  await tween(sp(750),(e,k)=>{
+    victim.root.position.lerpVectors(from,to,e);
+    victim.root.position.y += Math.sin(k*Math.PI)*2.6;
+    victim.root.rotation.y=fromYaw+k*Math.PI*4;
+    victim.model.rotation.z=k*Math.PI*2;
+  },easeIO);
+  victim.model.rotation.z=0;
+  return e0===G.epoch;
+}
+async function performMove(m){
+  const e0=G.epoch, alive=()=>e0===G.epoch;
+  G.phase='anim'; clearHighlights(); updateUI();
+  const pls=m.planes, owner=pls[0].owner;
+  if(m.type==='takeoff'){
+    SFX.takeoff();
+    log(`${pname(owner)} 一架飞机 <span class="g">起飞</span>`);
+    pls[0].step=0;
+    const from=pls[0].root.position.clone(), to=posFor(owner,0,pls[0].idx);
+    const d=dirFor(owner,0,pls[0].idx), yaw=Math.atan2(d.x,d.z), fy=pls[0].root.rotation.y;
+    await tween(sp(550),(e,k)=>{
+      pls[0].root.position.lerpVectors(from,to,e);
+      pls[0].root.position.y += Math.sin(k*Math.PI)*1.5;
+      pls[0].root.rotation.y=fy+(yaw-fy)*e;
+    });
+    if(!alive()) return;
+    burst(to.clone().setY(0.3), COLORS[owner], 26, 2);
+  } else {
+    for(const s of pathSteps(m.from, G.dice)){
+      if(!await hopGroup(pls,s)) return;
+    }
+    if(m.dest!==m.from+G.dice) log(`${pname(owner)} 点数超出，<span class="g">反弹后退</span>`);
+  }
+  let dest=pls[0].step;
+  dest=await applyChain(pls,dest);
+  if(!alive()||dest===-999) return;
+
+  if(dest<=OUTER){
+    const ai=absIdx(owner,dest), victims=[];
+    for(let q=0;q<4;q++) if(q!==owner)
+      activePlanes(q).forEach(pl=>{ if(absIdx(q,pl.step)===ai) victims.push(pl); });
+    if(victims.length){
+      await Promise.all(victims.map(v=>capturePlane(v,owner)));
+      if(!alive()) return;
+    }
+  }
+  const justFinished=pls.filter(pl=>pl.step===GOAL);
+  if(justFinished.length){
+    SFX.finish();
+    burst(new THREE.Vector3(0,1,0), 0xffc94d, 70, 4);
+    log(`${pname(owner)} <span class="g">${justFinished.length} 架抵达终点</span>（${finishedPlanes(owner).length}/4）`);
+    toast(`🏁 ${NAMES[owner]} ${finishedPlanes(owner).length}/4 架抵达中心！`);
+  }
+  await layoutPlanes();
+  if(!alive()) return;
+  updateUI();
+
+  if(finishedPlanes(owner).length===4){ win(owner); return; }
+  if(G.dice===6){ toast('🎲 掷出 6，再来一次！'); log(`${pname(owner)} 掷出 6，<span class="g">追加一掷</span>`); startTurn(); }
+  else endTurn();
+}
+function endTurn(){
+  G.turn=(G.turn+1)%4;
+  if(G.turn===0) G.turns++;
+  startTurn();
+}
+async function startTurn(){
+  const e0=G.epoch;
+  G.phase='awaitRoll'; G.dice=0; G.legal=[];
+  updateUI();
+  if(G.turn!==0){
+    await delay(sp(700));
+    if(e0!==G.epoch||G.phase!=='awaitRoll') return;
+    doRoll();
+  }
+}
+async function doRoll(){
+  if(G.phase!=='awaitRoll') return;
+  const e0=G.epoch, alive=()=>e0===G.epoch;
+  G.phase='rolling'; updateUI();
+  const r = G.nextDice || (1+Math.floor(Math.random()*6));
+  G.nextDice=null;
+  $('diceFace').classList.add('rolling');
+  await diceAnim(r);
+  $('diceFace').classList.remove('rolling');
+  if(!alive()) return;
+  G.dice=r;
+  log(`${pname(G.turn)} 掷出 <span class="g">${r}</span>`);
+  updateUI();
+  const ms=legalMoves(G.turn,r);
+  G.legal=ms;
+  if(!ms.length){
+    SFX.pass();
+    toast(G.turn===0?'无棋可走，跳过回合':`${NAMES[G.turn]}无棋可走`);
+    log(`${pname(G.turn)} 无棋可走`);
+    await delay(sp(950));
+    if(!alive()) return;
+    endTurn(); return;
+  }
+  G.phase='choose';
+  if(G.turn===0){
+    showHighlights(); updateUI();
+    if(ms.length===1){
+      await delay(sp(600));
+      if(!alive()||G.phase!=='choose') return;
+      performMove(ms[0]);
+    } else toast('点击发光的飞机移动', 2400);
+  } else {
+    updateUI();
+    const m=aiPick(ms);
+    await delay(sp(560));
+    if(!alive()) return;
+    performMove(m);
+  }
+}
+async function diceAnim(r){
+  diceBusy=true; diceIdleSpin=false;
+  SFX.dice();
+  const targetQ=faceQuat(r);
+  const axis=new THREE.Vector3(Math.random()-0.5,Math.random()-0.5,Math.random()-0.5).normalize();
+  let midQ=null;
+  await tween(sp(900),(e,k)=>{
+    dice.position.y=DICE_POS.y+Math.sin(k*Math.PI)*1.7;
+    if(k<0.62){ dice.rotateOnWorldAxis(axis,0.32*(1-k)+0.06); }
+    else{
+      if(!midQ) midQ=dice.quaternion.clone();
+      dice.quaternion.slerpQuaternions(midQ,targetQ,easeOut((k-0.62)/0.38));
+    }
+  },t=>t);
+  dice.position.y=DICE_POS.y;
+  diceBusy=false;
+}
+
+/* ---------- AI ---------- */
+function aiPick(ms){
+  if(G.difficulty==='easy') return ms[Math.floor(Math.random()*ms.length)];
+  const p=G.turn;
+  let best=null, bestS=-1e9;
+  ms.forEach(m=>{
+    const pl=m.planes[0];
+    const raw = m.type==='takeoff'?0:m.dest;
+    const fin = m.type==='takeoff'?chainDest(p,0):chainDest(p,raw);
+    let s=Math.random()*12;
+    if(fin===GOAL) s+=1000;
+    else if(fin>OUTER) s+=260+fin*2;
+    if(fin<=OUTER){
+      const ai=absIdx(p,fin);
+      for(let q=0;q<4;q++) if(q!==p)
+        activePlanes(q).forEach(v=>{
+          if(absIdx(q,v.step)===ai) s+=430+v.step*5;
+        });
+      if(G.difficulty==='hard'){
+        for(let q=0;q<4;q++) if(q!==p)
+          activePlanes(q).forEach(v=>{
+            const d=(absIdx(q,v.step)-ai+52)%52;
+            if(d>=1&&d<=6) s-=(7-d)*34;
+          });
+        if(fin<=OUTER && cellOwner(absIdx(p,fin))===p) s+=20;
+      }
+    }
+    if(m.type==='takeoff') s+=165+hangarPlanes(p).length*26;
+    if(fin!==raw) s+=95;
+    s+=fin*2.2;
+    if(s>bestS){ bestS=s; best=m; }
+  });
+  return best;
+}
+
+/* ---------- 胜利 / 重开 ---------- */
+function win(p){
+  G.phase='over'; G.winner=p; clearHighlights(); updateUI();
+  $('winTitle').textContent = p===0?'🎉 你赢了！':`${NAMES[p]}获胜`;
+  $('winTitle').style.color = p===0?'var(--gold)':CSSC[p];
+  $('winSub').textContent = p===0?'四架飞机全部安全抵达中心塔台，漂亮的航线！':'对手的四架飞机率先全部抵达中心，再战一局扳回来！';
+  $('stTurns').textContent=G.turns;
+  $('stCap').textContent=G.captures[0];
+  $('stLoss').textContent=G.losses[0];
+  log(`<span class="g">🏆 ${pname(p)} 获得胜利！</span>`);
+  SFX[p===0?'win':'lose']();
+  let n=0;
+  const confetti=()=>{
+    if(G.phase!=='over'||n++>7) return;
+    burst(new THREE.Vector3((Math.random()-0.5)*8,3+Math.random()*3,(Math.random()-0.5)*8), COLORS[Math.floor(Math.random()*4)], 60, 4.5);
+    setTimeout(confetti, 420);
+  };
+  confetti();
+  setTimeout(()=>{ if(G.phase==='over') $('winOverlay').classList.add('show'); }, 900);
+}
+function restart(){
+  G.epoch++;
+  flushTweens(); clearHighlights();
+  bursts.forEach(b=>{ scene.remove(b.pts); b.pts.geometry.dispose(); b.pts.material.dispose(); }); bursts.length=0;
+  G.turn=0; G.dice=0; G.turns=1; G.legal=[]; G.winner=null;
+  G.captures=[0,0,0,0]; G.losses=[0,0,0,0]; G.nextDice=null;
+  G.planes.forEach(pl=>{ pl.step=-1; pl.model.rotation.set(0,0,0); pl.root.scale.setScalar(1); });
+  layoutPlanes(false);
+  diceBusy=false; diceIdleSpin=true;
+  $('winOverlay').classList.remove('show');
+  logEl.innerHTML='';
+  log('新的一局开始，<span class="c0">红方</span>先手');
+  toast('新的一局 · 红方先手');
+  startTurn();
+}
+
+/* ================= 控件绑定 ================= */
+$('rollBtn').addEventListener('click',()=>{ ensureAudio(); if(G.phase==='awaitRoll'&&G.turn===0){ SFX.click(); doRoll(); } });
+addEventListener('keydown',e=>{
+  if(e.code==='Space'){ e.preventDefault(); ensureAudio(); if(G.phase==='awaitRoll'&&G.turn===0) doRoll(); }
+});
+$('restartBtn').addEventListener('click',()=>{ ensureAudio(); SFX.click(); restart(); });
+$('againBtn').addEventListener('click',()=>{ SFX.click(); restart(); });
+$('viewBtn').addEventListener('click',()=>{ SFX.click(); $('winOverlay').classList.remove('show'); });
+$('rulesBtn').addEventListener('click',()=>{ ensureAudio(); SFX.click(); $('rulesOverlay').classList.add('show'); });
+$('rulesClose').addEventListener('click',()=>{ SFX.click(); $('rulesOverlay').classList.remove('show'); });
+$('rulesOverlay').addEventListener('click',e=>{ if(e.target===$('rulesOverlay')) $('rulesOverlay').classList.remove('show'); });
+$('difficulty').addEventListener('change',e=>{ G.difficulty=e.target.value; toast('难度：'+e.target.selectedOptions[0].textContent); });
+$('speed').addEventListener('change',e=>{ G.speed=parseFloat(e.target.value); toast('速度：'+e.target.selectedOptions[0].textContent); });
+$('soundBtn').addEventListener('click',()=>{
+  ensureAudio(); G.muted=!G.muted;
+  if(master) master.gain.value=G.muted?0:0.5;
+  $('soundBtn').textContent=G.muted?'🔇':'🔊';
+  if(!G.muted) SFX.click();
+});
+addEventListener('pointerdown',ensureAudio,{once:true});
+
+/* ================= 主循环 ================= */
+let last=performance.now();
+const tmpV=new THREE.Vector3();
+function frame(dt, t){
+  tweens.forEach(tw=>{
+    tw.t+=dt*1000;
+    const k=Math.min(1,tw.t/tw.dur);
+    tw.fn(tw.ease(k),k);
+    if(k>=1){ tweens.delete(tw); tw.res(); }
+  });
+
+  controls.update();
+
+  flightCells.forEach((m,i)=>m.emissiveIntensity=0.45+Math.sin(t*3+i)*0.25);
+  cornerLights.forEach((l,i)=>l.material.emissiveIntensity=1.1+Math.sin(t*2.4+i*1.7)*0.8);
+  beacon.rotation.y=t*0.8; beacon.position.y=2.5+Math.sin(t*1.4)*0.12;
+  beaconLight.intensity=22+Math.sin(t*1.4)*6;
+  beam.material.opacity=0.09+Math.sin(t*1.4)*0.04;
+  halo.material.emissiveIntensity=1.3+Math.sin(t*0.9)*0.4;
+
+  if(!diceBusy){
+    dice.position.y=DICE_POS.y+Math.sin(t*1.8)*0.09;
+    if(diceIdleSpin) dice.rotation.y+=dt*0.6;
+  }
+
+  const dp=dust.geometry.attributes.position;
+  for(let i=0;i<dp.count;i++){
+    let y=dp.getY(i)+dust.userData.spd[i]*dt;
+    if(y>13) y=0;
+    dp.setY(i,y);
+  }
+  dp.needsUpdate=true;
+
+  for(let i=bursts.length-1;i>=0;i--){
+    const b=bursts[i]; b.life+=dt;
+    const arr=b.pts.geometry.attributes.position;
+    for(let j=0;j<b.v.length;j++){
+      b.v[j].y-=6*dt;
+      arr.setXYZ(j, arr.getX(j)+b.v[j].x*dt, Math.max(0.05,arr.getY(j)+b.v[j].y*dt), arr.getZ(j)+b.v[j].z*dt);
+    }
+    arr.needsUpdate=true;
+    b.pts.material.opacity=Math.max(0,1-b.life/b.max);
+    if(b.life>=b.max){ scene.remove(b.pts); b.pts.geometry.dispose(); b.pts.material.dispose(); bursts.splice(i,1); }
+  }
+
+  G.highlights.forEach(h=>{
+    const s=1+Math.sin(t*5)*0.12;
+    h.scale.setScalar(s);
+    h.position.copy(h.userData.plane.root.position).setY(0.17);
+    h.material.opacity=0.7+Math.sin(t*5)*0.3;
+  });
+  if(marker.visible) marker.scale.setScalar(1+Math.sin(t*6)*0.1);
+
+  G.planes.forEach(pl=>{
+    if(pl.step===GOAL){
+      const ang=(pl.owner*4+pl.idx)/16*Math.PI*2+t*0.3;
+      tmpV.set(Math.cos(ang)*0.72, 0.72+Math.sin(t*2+pl.idx)*0.05, Math.sin(ang)*0.72);
+      pl.root.position.lerp(tmpV,0.08);
+      pl.root.rotation.y=Math.atan2(-Math.sin(ang),Math.cos(ang));
+      pl.root.scale.lerp(tmpV.setScalar(0.62),0.1);
+    } else {
+      const target=(hovered===pl)?1.14:1;
+      pl.root.scale.lerp(tmpV.setScalar(target),0.15);
+      pl.model.position.y = pl.step===-1 ? Math.sin(t*2+pl.idx*1.3+pl.owner)*0.035 : 0;
+    }
+  });
+
+  composer.render();
+}
+renderer.setAnimationLoop(()=>{
+  const now=performance.now(), dt=Math.min(0.05,(now-last)/1000); last=now;
+  frame(dt, now/1000);
+});
+
+addEventListener('resize',()=>{
+  const w=Math.max(1,innerWidth), h=Math.max(1,innerHeight);
+  camera.aspect=w/h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w,h);
+  composer.setSize(w,h);
+});
+
+/* ================= 入场 ================= */
+(async()=>{
+  const e0=G.epoch;
+  const camFrom=camera.position.clone(), camTo=new THREE.Vector3(0,13.8,15.2);
+  tween(1500,e=>camera.position.lerpVectors(camFrom,camTo,e),easeOut);
+  await tween(1600,(e,k)=>{
+    entranceCells.forEach((c,i)=>{
+      const local=Math.max(0,Math.min(1,(k*1600-i*14)/320));
+      c.scale.setScalar(Math.max(0.001,easeBack(local)));
+    });
+  },t=>t);
+  if(e0!==G.epoch) return;
+  entranceCells.forEach(c=>c.scale.setScalar(1));
+  document.getElementById('loading').classList.add('hide');
+  log('欢迎来到星夜机场，<span class="c0">红方</span>先手');
+  toast('欢迎来到星夜机场 · 掷出 6 即可起飞', 2600);
+  startTurn();
+})();
+
+/* 调试钩子（自动化测试用） */
+window.__flight={
+  state:()=>({phase:G.phase,turn:G.turn,dice:G.dice,turns:G.turns,winner:G.winner,
+    planes:G.planes.map(p=>({o:p.owner,i:p.idx,s:p.step})),captures:[...G.captures]}),
+  setNextDice:v=>{G.nextDice=v;},
+  roll:()=>{ if(G.phase==='awaitRoll'&&G.turn===0) doRoll(); },
+  moveFirst:()=>{ if(G.phase==='choose'&&G.turn===0&&G.legal.length) performMove(G.legal[0]); },
+  restart,
+  pump:(seconds)=>{ const n=Math.ceil(seconds/0.016); for(let i=0;i<n;i++) frame(0.016, performance.now()/1000+i*0.016); },
+  step:(dtMs)=>frame(dtMs/1000, performance.now()/1000),
+  capture:(w,h)=>{ renderer.setSize(w,h); composer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix(); frame(0.016, performance.now()/1000); return renderer.domElement.toDataURL('image/jpeg',0.82); },
+};
+</script>
+</body>
+</html>
